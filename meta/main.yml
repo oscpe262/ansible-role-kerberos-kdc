@@ -1,0 +1,14 @@
+## roles/kerberos-kdc/meta/main.yml
+# Meta file for kerberos-kdc 
+# vim:ft=ansible:
+---
+## If another role lists a dependency, it will only run once by default.
+allow_duplicates: no
+
+## List of role dependencies
+dependencies: []
+  # If dependency, remove brackets, list as suggested below:
+  # - { role: foorole, some_parameter: 3, another_parameter: 4  }
+
+...
+

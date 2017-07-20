@@ -1,0 +1,12 @@
+## roles/kerberos-kdc/vars/main.yml
+# General variables associated with this role.
+# vim:ft=ansible:
+---
+## Examples:
+# list:
+#   - foo
+#   - fee
+
+# variable: foo
+
+...
