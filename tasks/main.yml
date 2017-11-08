@@ -2,19 +2,88 @@
 ## Role main file
 # vim:ft=ansible:
 ---
-## Initialise distribution-specific variables
-#- include_vars: "{{ item }}"
-#  with_first_found:
-#    - "{{ ansible_distribution }}.yml"
-#    - "{{ ansible_os_family }}.yml"
-#  tags:
+- name: "Assert that we are in a valid environment"
+  assert:
+    that:
+      - "'RedHat' in ansible_os_family"
+    msg: "Only RedHat family supported at this time."
 
-#- include: Archlinux.yml
-#  when: "'Archlinux' in ansible_distribution"
-#  tags: 
+- name: Include secrets
+  include_vars: secrets.yml
 
-#- include: CentOS.yml
-#  when: "'CentOS' in ansible_distribution"
-#  tags: 
+- name: Install packages needed
+  package:
+    name: '{{ item  }}'
+    state: present
+  with_items:
+    - python2-pip
+    - krb5-server
+    - krb5-workstation
+    - pam_krb5
 
-...
+- name: Ansible role requires pexpect to run
+  pip:
+    name: pexpect
+    executable: pip2
+    
+- name: Edit Server Configuration Files
+  template:
+    src: '{{ item }}.j2'
+    dest: /var/kerberos/krb5kdc/{{ item }}
+  with_items:
+    - kadm5.acl
+    - kdc.conf
+
+- name: Server is also a client, edit krb5.conf accordingly
+  template:
+    src: krb5.conf.j2
+    dest: /etc/krb5.conf
+
+- name: Ensure that the Random Number Generator Daemon is running
+  service:
+    name: rngd
+    state: started
+    enabled: yes
+
+- name: Is there a database already? If so, it will be removed and a new one created
+  stat:
+    path: /var/kerberos/krb5kdc/principal
+  register: db_exists
+
+- name: Destroy Existing KDC Database
+  command: /bin/bash -c "kdb5_util destroy -f {{ REALM }}"
+  when: db_exists.stat.exists == true
+
+- name: Create the KDC Database
+  expect:
+    command: /bin/bash -c "kdb5_util create -s -r {{ REALM }}"
+    responses:
+      (?i)key: '{{ master_key }}'
+      (?i)verify: '{{ master_key }}'
+
+- name: Start and Enable Kerberos
+  service:
+    name: '{{ item }}'
+    state: reloaded
+    enabled: yes
+  with_items:
+    - krb5kdc
+    - kadmin
+
+- name: "Create Principals: Root is admin"
+  command: /bin/bash -c "echo -e '{{ master_key }}\n{{ master_key }}' | kadmin.local -q 'addprinc root/admin'"
+  
+- name: "Create Principals: add host"
+  command: /bin/bash -c "echo -e '{{ master_key }}\n{{ master_key }}' | kadmin.local -q 'addprinc -randkey host/{{ kdc }}'"
+
+- name: "Create Principals: copy keytab to host"
+  command: /bin/bash -c "echo -e '{{ master_key }}\n{{ master_key }}' | kadmin.local -q 'ktadd host/{{ kdc}}'"
+
+- name: Allow Kerberos authentication
+  command: authconfig --enablekrb5 --update
+
+- name: Restart SSHD service
+  service:
+    name: sshd
+    state: reloaded
+... 

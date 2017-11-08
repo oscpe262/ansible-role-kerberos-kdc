@@ -2,5 +2,8 @@
 # Default lower priority variables for the role
 # vim:ft=ansible:
 ---
+REALM: OSCPE.SE
+realm: oscpe.se
+kdc: 'authserver.{{realm}}'
 ...
 
